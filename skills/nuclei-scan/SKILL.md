@@ -102,3 +102,12 @@ nuclei -l runs/alive-urls.txt -tags cve -tl
 | 命中一堆 low/info | severity 没限 | 演练加 `-severity critical,high,medium` |
 | 目标被打挂 | 并发过高 / 跑了 dos 模板 | 降 `-rl`/`-c`；确认 ignore 文件没被动过 |
 | 内网目标打不到 | 没走隧道 | 加 `-proxy socks5://127.0.0.1:<suo5端口>`（技能 `suo5-tunnel`） |
+
+## 判废（漏扫结果什么不能直接报）
+| 现象 | 结论 |
+|---|---|
+| 模板命中但响应是通用 200 | 可能是误报，必须手工复验 |
+| 只靠版本匹配命中 CVE | 需实际打 payload 验证 |
+| 大量 info 级模板命中 | 信息收集，不是漏洞 |
+| 同一问题被 10 个模板重复报 | 去重后算 1 条 |
+| 命中但目标是 CDN 边缘节点 | 打的是 CDN 不是应用 |
