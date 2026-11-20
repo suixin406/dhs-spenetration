@@ -1,0 +1,38 @@
+{
+  "name": "@local/dsh-pentest-preset",
+  "version": "3.0.0",
+  "private": false,
+  "type": "module",
+  "description": "DeepSeek Harness 渗透与逆向一体化 Agent 预设：56 个阶段技能 + 48 篇实战知识库 + 6 个命令行工具 + 自动决断引擎",
+  "keywords": [
+    "dsh",
+    "deepseek-harness",
+    "agent-preset",
+    "pentest",
+    "redteam",
+    "security",
+    "渗透",
+    "逆向"
+  ],
+  "license": "MIT",
+  "files": [
+    "cordis.patch.yml",
+    "PROMPT.md",
+    "README.md",
+    "LICENSE",
+    "skills",
+    "知识库",
+    "tools"
+  ],
+  "dsh": {
+    "bundle": {
+      "patch": "./cordis.patch.yml"
+    }
+  },
+  "scripts": {
+    "check": "node -e \"const fs=require('fs');const d='skills';let n=0,bad=[];for(const x of fs.readdirSync(d)){const p=d+'/'+x+'/SKILL.md';if(!fs.existsSync(p)){bad.push(x);continue}n++}console.log('skills:',n,'missing:',bad.length?bad:'none')\""
+  },
+  "engines": {
+    "node": ">=18"
+  }
+}
