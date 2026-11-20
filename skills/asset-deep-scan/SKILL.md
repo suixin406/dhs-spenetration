@@ -108,3 +108,23 @@ close 报缺项就补，不能跳过；只有 close 成功才算这个资产看�
 | 五项检查都跑了但全是"未发现" | 写清跑了什么，不要写"安全" |
 | 只做了 surface 没做 auth | 未完成，不能下结论 |
 | 候选漏洞未验证 | 必须标"未验证假设" |
+
+## 一·补、五项检查的可执行定义
+
+```bash
+T=https://<host>
+# surface
+curl -sSI $T | head -20
+for p in .env .git/config admin.php backup.zip; do
+  printf '%-14s ' $p; curl -sS -o /dev/null -w '%{http_code}\n' $T/$p
+done
+# web
+curl -sS $T | grep -oE 'src="[^"]+\.js"' | head
+# auth
+curl -sS -X POST "$T/api/login" -d 'username=admin&password=admin' -w '\n%{http_code}\n'
+curl -sS "$T/api/user/info" -w '\n%{http_code}\n'    # 无 token 应 401
+# cve
+curl -sSI $T | grep -i server
+# app
+curl -sS "$T/api/list?page=1&limit=1" -w '\n%{http_code}\n'
+```
