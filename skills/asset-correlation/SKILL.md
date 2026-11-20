@@ -44,3 +44,21 @@ enabled: true
 | 同 IP 不同域但内容完全不同 | 共享主机，不是同一组织 |
 | 同证书但不同组织 | 可能是 CDN/共享证书 |
 | 同名品牌不同 TLD 但注册商不同 | 仿站，不是资产 |
+
+## 一·补、可执行命令
+
+```bash
+# 域名 → IP
+for h in $(cat subs.txt); do echo -n "$h "; dig +short $h A | tr '\n' ' '; echo; done
+
+# 证书反查同组织
+curl -sS "https://crt.sh/?q=<domain>&output=json" \
+  | python -c "import sys,json;[print(n) for r in json.load(sys.stdin) for n in r['name_value'].split()]" | sort -u
+
+# 同 ASN 段
+whois -h whois.radb.net -- '-i origin AS<asn>' | grep -E '^route'
+
+# favicon 指纹（FOFA: icon_hash="<h>"）
+curl -sS "https://<host>/favicon.ico" -o f.ico
+python -c "import mmh3,base64;print(mmh3.hash(base64.encodebytes(open('f.ico','rb').read())))"
+```
