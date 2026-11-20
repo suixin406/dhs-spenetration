@@ -1,177 +1,177 @@
 # dsh-pentest-preset
 
-面向 **DeepSeek Harness (DSH)** 的渗透与逆向一体化 Agent 预设。
+面向 **DeepSeek Harness（DSH）** 的授权安全测试与逆向 Agent 预设。
 
-**56 个阶段技能 + 48 篇实战知识库 + 6 个命令行工具 + 自动决断引擎。**
+当前版本包含 **74 个技能、48 篇知识正文、6 个命令行工具**，并提供机器可执行的授权范围门禁、自动决断提示词、测试与打包检查。
 
-不是提示词合集，是一套能自己决策下一步打哪里的执行体：给一个 URL/IP/域名/APK，它按信号自动分流到对应手法，打到出结果为止。
+> 适用范围：自建实验室、CTF/靶场、代码与样本分析，以及拥有书面授权的安全评估。网络操作以 `AUTHORIZED-TARGETS.json` 为准。
 
----
+## 能力组成
 
-## 组成
+### 34 个 `pentest-*` 方法论技能
 
-### 1. 56 个技能（skills/）
+覆盖侦察、指纹、中间件与 CVE、认证、越权、OTP、注入、上传、SSRF、反序列化、前端情报、源站定位、CORS、XSS、LFI、GraphQL、WebSocket、请求走私、竞态、业务逻辑、数据库、提权、横向、移动端和逆向等路径。
 
-**方法论层（16 个 `pentest-*`）** —— 回答「怎么测」
+### 40 个操作与编排技能
 
-| 技能 | 覆盖 |
-|---|---|
-| `pentest-recon` | 资产铺图、泛解析止损、云 CDN CNAME 指纹、源站定位 |
-| `pentest-fingerprint` | `Server` 头 → 精确版本 → 分流 |
-| `pentest-middleware` | nginx/Tengine/Apache/IIS/Tomcat 版本 CVE + 配置类（alias 穿越、merge_slashes、PATH_INFO、走私降级） |
-| `pentest-cve-live` | CVE 实时查询三层：CISA KEV 在野利用 → NVD 版本区间 → nuclei 模板 |
-| `pentest-crypto` | AES/DES/SM4/RSA 识别、ECB/CBC 判定、密钥定位、签名复现 |
-| `pentest-auth` | 默认口令、注册、JWT、越权、**token 位置四枚举**、固定设备 token 识别 |
-| `pentest-otp` | 验证码/短信码/邮件码：三态 oracle、窗口测量、限流探测、并发爆破 |
-| `pentest-injection` | SQLi 全类型、命令注入、SSTI、XXE、**SQL 报错逐列 walk** |
-| `pentest-upload` | 任意后缀、路径穿越、对象存储不可执行判定 |
-| `pentest-ssrf` | 内网、云元数据、盲 SSRF 外带 |
-| `pentest-deser` | Java/PHP/.NET/Python/Node 反序列化 |
-| `pentest-framework-cve` | Spring/Shiro/Struts2/Log4j2/Fastjson/ThinkPHP/Laravel/国产面板 |
-| `pentest-mobile` | APK/IPA 解包、strings 取接口与密钥、证书固定绕过、动态抓包 |
-| `pentest-privesc` | Linux/Windows 提权、容器逃逸 |
-| `pentest-lateral` | 凭证复用、隧道、数据库跳板 |
-| `pentest-reverse` | 静态/动态逆向、脱壳、协议还原 |
+覆盖被动/主动侦察、资产关联、Nuclei、目录发现、OOB 验证、内网扫描、隧道、Shell 处理、AD、云与 Kubernetes、网络设备、供应链、凭证验证、活动编排和证据覆盖。
 
-**操作工具链层（40 个）** —— 回答「怎么打/怎么落地」
+其中 34 个操作 Skill 能与可选的 `dsh-purge-safe` 演练台运行时协同使用 `redteam_*` 资产库与证据链；没有该运行时时会退化为本地文件记录，不影响核心 Skill 和命令行工具。
 
-```
-侦察  passive-recon fofa-recon recon-pipeline asset-correlation active-scan
-      netspy-recon browser-automation kimi-webbridge deepseek-web-intel
-      mobile-code-recon web-fingerprint
-验证  asset-deep-scan nuclei-scan unauth-exploit dir-bruteforce oob-verify api-data-exfil
-隧道  chisel-tunnel frp-tunnel suo5-tunnel c2-infra vps-reverse-shell shell-handler
-横向  host-post-exploit lateral-movement ad-attack cloud-k8s network-device
-      credential-attack fscan-intranet gogo-intranet supply-chain
-编排  campaign-planning specialist-paths opsec-hygiene score-coverage
-      cn-proxy-pool redteam-setup ai-agent-attack webshell-toolkit
-```
+### 48 篇知识正文
 
-### 2. 知识库（知识库/，49 篇）
+位于 `知识库/`。入口是 `知识库/打穿短表.md`，专题正文按信号加载，不建议每次通读全库。完整目录见 `知识库/README.md`。
 
-实战方法论与测试清单，与技能配合使用：
-
-- **`打穿短表.md`** —— 90 条手法索引，四列：`认什么 / 打哪 / 出什么算成 / 假点`
-- 专题：`idor-test` `authbypass-test` `injection-test` `ssrf-test` `file-upload-test`
-  `logic-test` `race-condition-test` `cache-poisoning-test` `http-smuggling-test`
-  `deserialization-test` `oauth-jwt-test` `websocket-test` `graphql-test`
-  `path-traversal-lfi-test` `prototype-pollution-test` `xss-test` `xxe-test`
-  `subdomain-takeover-test` `type-juggling-test` `waf-bypass` `recon-methodology`
-  `js-reverse-guide` `info-leak-test` `api-gateway-test` …
-
-**用法**：进站先读 `打穿短表.md`，对得上再打开对应模块；**不要每站通读整库**。
-
-### 3. 工具（tools/，6 个，无额外依赖）
+### 6 个命令行工具
 
 | 工具 | 用途 |
 |---|---|
-| `jsintel.py` | 从前端 bundle 提取 API 路径、baseURL、AES 密钥候选、表单字段、懒加载分块 |
-| `crypto_tool.py` | AES/DES 加解密、密钥爆破、签名复现（md5/sha1/hmac） |
-| `otp_brute.py` | 验证码并发爆破，带 oracle 判定、限流探测、进度与吞吐统计 |
-| `apk_extract.py` | APK 解包提取 URL/API/密钥/字段（纯 Python，不依赖 jadx） |
-| `http_concurrent.py` | 高并发请求框架，带 AES 解密钩子、重试、限速、结果落盘 |
-| `jwt_tool.py` | JWT 解码、alg=none 测试、payload 篡改、HS256 密钥爆破 |
+| `jsintel.py` | 从前端 bundle 提取 API、baseURL、字段、密钥候选和分块 |
+| `crypto_tool.py` | AES ECB/CBC、编码识别、密钥字典和签名复现 |
+| `otp_brute.py` | 受控范围内的验证码窗口、限流和并发验证 |
+| `apk_extract.py` | APK 中的 URL、API、字段、密钥候选和 Manifest 字符串 |
+| `http_concurrent.py` | 有界并发 HTTP 请求、重试、结果落盘和 AES 响应钩子 |
+| `jwt_tool.py` | JWT 解码、篡改、alg=none 变体及 HS256/384/512 验证 |
+
+另有两个维护/门禁工具：`scope_guard.py` 和 `sync-persona.py`。
+
+## 运行要求
+
+- DeepSeek Harness：目标版本 `0.2.2-rc.3`
+- Node.js：18 或更高版本
+- Python：3.10 或更高版本
+- Python 依赖：仅并发 HTTP 和密码学功能需要 `requests`、`cryptography`
 
 ```bash
-python tools/jsintel.py https://target/assets/index.abc.js -o loot/intel
-python tools/crypto_tool.py dec --key '=^%7@84%0^!8892-' --b64 '<cipher>'
-python tools/otp_brute.py --url https://api/x/reset --param 'email=a@b.com&code={code}' --probe-only
-python tools/jwt_tool.py decode eyJ...
+python -m pip install -r requirements.txt
 ```
 
-### 4. 自动决断引擎（PROMPT.md）
-
-53 行决断表，按五层组织：**侦察 → 识别 → 破门 → 落地 → 编排**。
-每拿到一个信号（新目标 / 指纹 / 登录框 / 加密响应 / 验证码 / shell / 内网），立刻查表选下一发，不等确认。
-
-**七条硬纪律**（实战踩坑沉淀）：
-1. 进站先读 `打穿短表.md`
-2. 参数名不准盲猜，先扒前端 bundle / APK
-3. token 位置必须四枚举（header / query / body / cookie）
-4. 固定 token 要识别（注册接口返回同一个 token = 设备票，不是账号）
-5. 泛解析止损（随机子域能解析就放弃子域字典）
-6. 配置类漏洞优先于 CVE（版本要精确匹配，配置错永远在）
-7. CVE 以实时为准（KEV → NVD → nuclei，静态表只作索引）
-
----
+本地文件版 `jsintel.py`、`apk_extract.py` 和 `scope_guard.py` 只使用 Python 标准库。
 
 ## 安装
 
-### 方式一：本地路径安装（推荐）
-
 ```bash
-git clone https://github.com/<you>/dsh-pentest-preset.git
+git clone https://github.com/suixin406/dhs-spenetration.git
+cd dhs-spenetration
+python -m pip install -r requirements.txt
 ```
 
-然后在 DSH 里：
+先建立实际授权范围：
+
+```bash
+cp AUTHORIZED-TARGETS.template.json AUTHORIZED-TARGETS.json
+# 编辑 AUTHORIZED-TARGETS.json：目标、端口、动作级别、时间窗口、授权依据
+```
+
+Windows PowerShell：
+
+```powershell
+Copy-Item AUTHORIZED-TARGETS.template.json AUTHORIZED-TARGETS.json
+```
+
+然后在 DSH 中安装当前目录：
 
 ```js
 plugin_manager({
   action: "install_bundle",
-  target: "<clone 下来的绝对路径>"
+  target: "<仓库绝对路径>"
 })
 ```
 
-安装后在 **设置 → Agent 预设** 里选择「渗透与逆向」。
+安装后在“设置 → Agent 预设”选择“渗透与逆向”。
 
-### 方式二：手动挂载
+### 可选：完整 `redteam_*` 演练台
 
-把本目录加入你的 profile 依赖，并在 `cordis.patch.yml` 里：
+需要资产库、证据链、记分和 `redteam_preflight` 时，另行安装兼容的 `dsh-purge-safe >= 2.0.0 < 3`。它会修改宿主运行逻辑，因此本包只把它声明为可选 peer，不会静默安装。
 
-```yaml
-- id: agent-preset-registry
-  name: "@deepseek-ai/dsh-agent-preset-registry"
-  config:
-    selectedDefault: pentest
+```bash
+dsh plugin --profile web add https://codeload.github.com/CallMeGuLab/dsh-purge-safe/tar.gz/refs/heads/main
 ```
 
----
+完整退出并重启对应 DSH host，再按该插件说明启用演练台。未安装时，预设会把证据写到 `targets/<host>/`，不会调用不存在的 `redteam_*` 工具。
 
-## 目录结构
+## 范围门禁
 
-```
-dsh-pentest-preset/
-├── package.json            # dsh.bundle.patch -> cordis.patch.yml
-├── cordis.patch.yml        # 预设注册（persona 运行时读 PROMPT.md）
-├── PROMPT.md               # 人设 + 决断引擎 + 七条纪律
-├── skills/                 # 56 个技能，每个 <name>/SKILL.md
-│   ├── pentest-*/          # 16 个方法论技能
-│   └── <40 个操作技能>/
-├── 知识库/                  # 49 篇实战方法论
-│   ├── README.md
-│   ├── 打穿短表.md
-│   └── ...-test.md
-└── tools/                  # 6 个命令行工具
+配置采用默认拒绝。每个目标条目声明：
+
+- `hosts`：精确域名、`*.example.test`、IP 或 CIDR；
+- `ports`：端口、端口范围或 `*`；
+- `actions`：`passive`、`active`、`exploit`、`destructive`；
+- `validFrom` / `validUntil`：UTC/带时区时间窗口；
+- `authorizationReference`：SOW、工单或靶场分配记录。
+
+```bash
+python tools/scope_guard.py https://target.example:443 --action active --json
 ```
 
----
+破坏性动作即使在配置中允许，也需要本次显式确认：
 
-## 产出规范
-
-每个目标单独一个目录，禁止混放：
-
+```bash
+python tools/scope_guard.py https://target.example:443 \
+  --action destructive --confirm-destructive --json
 ```
+
+退出码：`0` 允许，`2` 拒绝，`3` 配置或目标无效。
+
+## 工具示例
+
+TLS 证书默认校验；只有实验室自签证书才显式使用 `--insecure`。
+
+```bash
+python tools/jsintel.py ./index.js -o loot/intel
+python tools/crypto_tool.py dec --key '=^%7@84%0^!8892-' --encoding base64 --b64 '<cipher>'
+python tools/apk_extract.py app.apk -o loot/app
+python tools/jwt_tool.py decode eyJ...
+python tools/http_concurrent.py get --urls urls.txt --threads 20 --out loot/scan.txt
+python tools/otp_brute.py --url https://lab/reset --param 'code={code}' --probe-only
+```
+
+## 证据目录
+
+每个目标独立存放，避免不同范围和凭据混放：
+
+```text
 targets/<host>/
-  recon/      原始探测输出
-  exploit/    利用脚本与回显
-  loot/       数据/凭证/文件
-  logs/       时间线
-  screens/    截图
-  notes.md    结论
-  meta.json   状态、凭证、shell
+  recon/
+  exploit/
+  loot/
+  logs/
+  screens/
+  notes.md
+  meta.json
 ```
 
----
+`targets/` 已被 `.gitignore` 排除。报告和截图仍应脱敏，令牌、Cookie、密钥和个人信息不进入公开提交。
 
-## 来源与致谢
+## 开发与验证
 
-- 知识库：`知识库/` 目录来自实战沉淀的 SRC 方法论合集
-- 40 个操作技能：来自 [CallMeGuLab/dsh-purge-safe](https://github.com/CallMeGuLab/dsh-purge-safe)（MIT），本仓库做了目录适配
-- CVE 保鲜设计思路：借鉴其「模板层 / 公告层 / 情报层 / 经验层」四层分离
-- 方法论技能（`pentest-*`）与决断引擎：本仓库原创，来自两个真实目标的完整对抗记录
+```bash
+npm run sync:persona        # PROMPT.md -> cordis.patch.yml
+npm run check               # 元数据、计数、链接、范围模板、提示词同步、可移植性
+python -m unittest discover -s tests -v
+npm pack --dry-run
+```
 
----
+CI 在 Python 3.10/3.12 与 Node.js 20 上执行相同验证。发布前应保证工作区干净，并用正常的 Git commit/push 保持原子提交。
 
-## 许可
+## 项目结构
 
-MIT
+```text
+├── package.json
+├── cordis.patch.yml
+├── PROMPT.md
+├── AUTHORIZED-TARGETS.template.json
+├── skills/                 # 74 个技能
+├── 知识库/                 # README + 48 篇正文
+├── tools/                  # CLI、门禁与维护工具
+├── scripts/                # 一致性检查与提示词同步
+└── tests/                  # Python 单元/烟雾测试
+```
+
+## 来源与许可
+
+- 本项目主体采用 MIT License。
+- 部分操作 Skill 改编自 `CallMeGuLab/dsh-purge-safe`；当前上游采用 Apache License 2.0。
+- 相关署名、修改说明和许可证副本见 `NOTICE`、`THIRD_PARTY_NOTICES.md` 与 `LICENSES/Apache-2.0.txt`。
+
+项目与 DeepSeek AI、DSH 官方无隶属关系。
