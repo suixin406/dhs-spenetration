@@ -13,14 +13,17 @@ import argparse
 import json
 import os
 import re
+import ssl
 import sys
+from urllib.request import Request, urlopen
 
-try:
-    import requests
-    import urllib3
-    urllib3.disable_warnings()
-except Exception:
-    requests = None
+from scope_guard import require_allowed
+
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
 
 UA = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)"}
 
@@ -43,14 +46,17 @@ INTERESTING = (
 )
 
 
-def read_source(src):
+def read_source(src, insecure=False, max_bytes=20 * 1024 * 1024):
     if os.path.isfile(src):
-        return open(src, encoding="utf-8", errors="ignore").read()
-    if requests is None:
-        sys.exit("需要 requests 才能抓 URL：pip install requests")
-    r = requests.get(src, headers=UA, verify=False, timeout=40)
-    r.raise_for_status()
-    return r.text
+        with open(src, encoding="utf-8", errors="ignore") as source:
+            return source.read(max_bytes + 1)
+    context = ssl._create_unverified_context() if insecure else ssl.create_default_context()
+    request = Request(src, headers=UA)
+    with urlopen(request, timeout=40, context=context) as response:
+        raw = response.read(max_bytes + 1)
+    if len(raw) > max_bytes:
+        raise ValueError("source exceeds --max-mb")
+    return raw.decode("utf-8", "ignore")
 
 
 def uniq(xs):
@@ -67,9 +73,21 @@ def main():
     ap.add_argument("src", help="bundle URL 或本地文件")
     ap.add_argument("-o", "--out", default="loot/intel", help="输出目录")
     ap.add_argument("--keywords", default="", help="额外关键词，逗号分隔")
+    ap.add_argument("--insecure", action="store_true", help="关闭 TLS 证书校验")
+    ap.add_argument("--max-mb", type=int, default=20, help="最大下载/读取体积")
+    ap.add_argument("--scope-config", help="AUTHORIZED-TARGETS.json 路径")
     a = ap.parse_args()
 
-    js = read_source(a.src)
+    if a.max_mb < 1 or a.max_mb > 1024:
+        ap.error("--max-mb must be between 1 and 1024")
+    if not os.path.isfile(a.src):
+        try:
+            require_allowed(a.src, "active", a.scope_config)
+        except (ValueError, PermissionError) as exc:
+            ap.error("scope denied: %s" % exc)
+    js = read_source(a.src, a.insecure, a.max_mb * 1024 * 1024)
+    if len(js.encode("utf-8")) > a.max_mb * 1024 * 1024:
+        ap.error("source exceeds --max-mb")
     os.makedirs(a.out, exist_ok=True)
     print("[+] source bytes: %d" % len(js), file=sys.stderr)
 
