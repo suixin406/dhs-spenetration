@@ -1,9 +1,9 @@
 {
   "name": "@local/dsh-pentest-preset",
-  "version": "3.0.0",
+  "version": "3.1.0",
   "private": false,
   "type": "module",
-  "description": "DeepSeek Harness 渗透与逆向一体化 Agent 预设：56 个阶段技能 + 48 篇实战知识库 + 6 个命令行工具 + 自动决断引擎",
+  "description": "DeepSeek Harness 渗透与逆向一体化 Agent 预设：56 个阶段技能 + 49 篇实战知识库 + 7 个工具 + 自动决断引擎",
   "keywords": [
     "dsh",
     "deepseek-harness",
