@@ -4,7 +4,7 @@
 >
 > **全量 nuclei 不当进度。** nuclei 只在需要已知 CVE / 暴露面（actuator、swagger、已知中间件）时辅助；禁止把「全量模板扫一遍」当本站矩阵。
 >
-> 调搜用 MCP `fofa`（`fofa__get_alerts`），不要自己 curl。Key 在 `~/.grok/config.toml` `[mcp_servers.fofa.env]`：主号 → backup → backup2，`fofa.py` 遇 429/820041 自动切。限流闸认 `dig-scope` §2.1.4。**禁止**把 email / key 写进本文件或对话。
+> 有 MCP `fofa` 时优先使用其受管接口；否则使用操作者明确配置的 `FOFA_KEY`。密钥放环境变量或宿主凭据存储，不写入仓库、报告或对话。限流与范围按 `../templates/execution-baseline.md`。
 
 ### FOFA 最短语法（备忘，不是开场）
 
