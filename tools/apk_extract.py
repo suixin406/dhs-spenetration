@@ -16,15 +16,18 @@
 import argparse
 import os
 import re
+import ssl
 import sys
 import zipfile
+from urllib.request import Request, urlopen
 
-try:
-    import requests
-    import urllib3
-    urllib3.disable_warnings()
-except Exception:
-    requests = None
+from scope_guard import require_allowed
+
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
 
 URL_RE = re.compile(rb"https?://[A-Za-z0-9\.\-_~:/?#\[\]@!$&'()*+,;=%]{6,200}")
 PATH_RE = re.compile(rb"/(?:api|v\d|user|order|pay|auth|admin|upload|sms|code|login|register|reset|config)[A-Za-z0-9_\-/\.]{0,60}")
@@ -34,40 +37,79 @@ FIELD_RE = re.compile(rb"[\"'](username|passwd|password|passWord|confirm_passwd|
 SIGN_RE = re.compile(rb"(?:md5|sha1|sha256|HmacSHA256|MessageDigest|Cipher|getInstance|AES|RSA|sm4)", re.I)
 
 
-def fetch(src, dest):
+def fetch(src, dest, insecure=False, max_bytes=300 * 1024 * 1024):
     if os.path.isfile(src):
         return src
-    if requests is None:
-        sys.exit("需要 requests 才能下载")
     print("[+] 下载 %s" % src, file=sys.stderr)
-    r = requests.get(src, stream=True, timeout=120, verify=False,
-                     headers={"User-Agent": "Mozilla/5.0"})
-    r.raise_for_status()
-    with open(dest, "wb") as f:
-        for chunk in r.iter_content(65536):
-            f.write(chunk)
+    context = ssl._create_unverified_context() if insecure else ssl.create_default_context()
+    request = Request(src, headers={"User-Agent": "Mozilla/5.0"})
+    total = 0
+    with urlopen(request, timeout=120, context=context) as response, open(dest, "wb") as output:
+        while True:
+            chunk = response.read(65536)
+            if not chunk:
+                break
+            total += len(chunk)
+            if total > max_bytes:
+                raise ValueError("APK exceeds --max-download-mb")
+            output.write(chunk)
     return dest
+
+
+def printable_strings(blob):
+    ascii_strings = [m.decode("utf-8", "ignore") for m in re.findall(rb"[ -~]{4,200}", blob)]
+    utf16_strings = []
+    for match in re.findall(rb"(?:[ -~]\x00){4,200}", blob):
+        utf16_strings.append(match.decode("utf-16le", "ignore"))
+    return sorted(set(ascii_strings + utf16_strings))
 
 
 def main():
     ap = argparse.ArgumentParser()
     ap.add_argument("src", help="APK 路径或 URL")
     ap.add_argument("-o", "--out", default="loot/app")
+    ap.add_argument("--insecure", action="store_true", help="关闭 TLS 证书校验")
+    ap.add_argument("--max-download-mb", type=int, default=300)
+    ap.add_argument("--max-entry-mb", type=int, default=128)
+    ap.add_argument("--max-total-mb", type=int, default=512)
+    ap.add_argument("--scope-config", help="AUTHORIZED-TARGETS.json 路径")
     a = ap.parse_args()
+    for name in ("max_download_mb", "max_entry_mb", "max_total_mb"):
+        if getattr(a, name) < 1:
+            ap.error("--%s must be positive" % name.replace("_", "-"))
     os.makedirs(a.out, exist_ok=True)
 
-    apk = fetch(a.src, os.path.join(a.out, "app.apk"))
-    z = zipfile.ZipFile(apk)
-    names = z.namelist()
-    print("[+] 条目 %d" % len(names))
+    if not os.path.isfile(a.src):
+        try:
+            require_allowed(a.src, "active", a.scope_config)
+        except (ValueError, PermissionError) as exc:
+            ap.error("scope denied: %s" % exc)
 
+    apk = fetch(a.src, os.path.join(a.out, "app.apk"), a.insecure, a.max_download_mb * 1024 * 1024)
     blobs = []
-    for n in names:
-        if re.search(r"(classes\d*\.dex|\.so$|AndroidManifest\.xml|assets/.*\.(json|js|xml|txt|properties))$", n):
+    manifest = b""
+    with zipfile.ZipFile(apk) as archive:
+        infos = archive.infolist()
+        print("[+] 条目 %d" % len(infos))
+        selected_total = 0
+        for info in infos:
+            n = info.filename
+            if not re.search(r"(classes\d*\.dex|\.so$|AndroidManifest\.xml|assets/.*\.(json|js|xml|txt|properties))$", n):
+                continue
+            if info.file_size > a.max_entry_mb * 1024 * 1024:
+                print("[!] 跳过超大条目 %s (%d bytes)" % (n, info.file_size), file=sys.stderr)
+                continue
+            selected_total += info.file_size
+            if selected_total > a.max_total_mb * 1024 * 1024:
+                raise ValueError("selected APK entries exceed --max-total-mb")
             try:
-                blobs.append((n, z.read(n)))
-            except Exception:
-                pass
+                data = archive.read(info)
+            except (OSError, RuntimeError, zipfile.BadZipFile) as exc:
+                print("[!] 读取失败 %s: %s" % (n, exc), file=sys.stderr)
+                continue
+            blobs.append((n, data))
+            if n == "AndroidManifest.xml":
+                manifest = data
     print("[+] 读取 %d 个关键条目" % len(blobs))
     total = b"\n".join(b for _, b in blobs)
 
@@ -91,6 +133,7 @@ def main():
     dump("api_paths.txt", paths)
     dump("keys.txt", keys + aks)
     dump("fields.txt", fields)
+    dump("manifest.txt", printable_strings(manifest))
 
     with open(os.path.join(a.out, "sign_algo_hints.txt"), "w", encoding="utf-8") as f:
         f.write("\n".join(signs))
