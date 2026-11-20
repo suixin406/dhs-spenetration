@@ -56,3 +56,29 @@ enabled: true
 ## 交接
 
 回报：入口、权限、能读到什么、到主防内网的路径与实测证据、未确认的范围；`needs` 写清用户确认/供应商授权。
+
+## 判废
+| 现象 | 结论 |
+|---|---|
+| 找到 Jenkins 但需登录且无弱口令 | 只算暴露面 |
+| 依赖混淆包上传成功但无人拉取 | 需证明会被安装 |
+| CI token 只读 | 权限有限，写清 |
+
+## 一·补、可执行命令
+
+```bash
+# Jenkins
+for p in /script /manage /api/json; do
+  printf '%-12s ' $p; curl -sS -o /dev/null -w '%{http_code}\n' "https://<host>$p"
+done
+
+# GitLab / Nexus / Artifactory
+curl -sS "https://<host>/-/health"
+curl -sS "https://<host>/service/rest/v1/repositories"
+
+# 依赖混淆（拿到内部包名后验证是否可从公网安装）
+npm view <内部包名> --registry https://registry.npmjs.org
+
+# CI token 泄露扫描
+grep -rE 'CI_JOB_TOKEN|GITLAB_TOKEN|GITHUB_TOKEN|NPM_TOKEN' . --include='*.yml' --include='*.env'
+```
