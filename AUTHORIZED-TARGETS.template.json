@@ -1,0 +1,39 @@
+{
+  "version": 1,
+  "default": "deny",
+  "targets": [
+    {
+      "id": "local-lab",
+      "hosts": [
+        "localhost",
+        "127.0.0.1",
+        "::1"
+      ],
+      "ports": ["*"],
+      "actions": [
+        "passive",
+        "active",
+        "exploit",
+        "destructive"
+      ],
+      "validFrom": null,
+      "validUntil": null,
+      "authorizationReference": "Local lab owned by the operator"
+    },
+    {
+      "id": "example-authorized-range",
+      "hosts": [
+        "*.example.test",
+        "192.0.2.0/24"
+      ],
+      "ports": [80, 443, 8080],
+      "actions": [
+        "passive",
+        "active"
+      ],
+      "validFrom": "2026-01-01T00:00:00Z",
+      "validUntil": "2026-12-31T23:59:59Z",
+      "authorizationReference": "Replace with SOW/ticket identifier before use"
+    }
+  ]
+}
