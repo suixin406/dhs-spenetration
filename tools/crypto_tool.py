@@ -23,6 +23,12 @@ import hmac
 import json
 import sys
 
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
+
 try:
     from cryptography.hazmat.primitives.ciphers import Cipher, algorithms, modes
     HAVE = True
@@ -53,35 +59,53 @@ def pkcs7_pad(b: bytes, bs: int = 16) -> bytes:
     return b + bytes([n]) * n
 
 
-def aes_dec(data: bytes, key: bytes, iv: bytes = None, mode: str = "ecb") -> bytes:
+def make_mode(mode: str, iv: bytes | None, zero_iv: bool = False):
+    if mode == "ecb":
+        return modes.ECB()
+    if mode != "cbc":
+        raise ValueError("mode must be ecb or cbc")
+    if iv is None and not zero_iv:
+        raise ValueError("CBC 需要 --iv；确认协议使用全零 IV 时显式传 --zero-iv")
+    value = iv if iv is not None else b"\x00" * 16
+    if len(value) != 16:
+        raise ValueError("AES-CBC IV 必须是 16 字节")
+    return modes.CBC(value)
+
+
+def aes_dec(data: bytes, key: bytes, iv: bytes = None, mode: str = "ecb", zero_iv: bool = False) -> bytes:
     if not HAVE:
         sys.exit("需要 cryptography：pip install cryptography")
     algo = algorithms.AES(key)
-    m = modes.ECB() if mode.lower() == "ecb" else modes.CBC(iv or b"\x00" * 16)
+    m = make_mode(mode.lower(), iv, zero_iv)
     d = Cipher(algo, m).decryptor()
     return d.update(data) + d.finalize()
 
 
-def aes_enc(data: bytes, key: bytes, iv: bytes = None, mode: str = "ecb") -> bytes:
+def aes_enc(data: bytes, key: bytes, iv: bytes = None, mode: str = "ecb", zero_iv: bool = False) -> bytes:
     if not HAVE:
         sys.exit("需要 cryptography：pip install cryptography")
     algo = algorithms.AES(key)
-    m = modes.ECB() if mode.lower() == "ecb" else modes.CBC(iv or b"\x00" * 16)
+    m = make_mode(mode.lower(), iv, zero_iv)
     e = Cipher(algo, m).encryptor()
     return e.update(pkcs7_pad(data)) + e.finalize()
 
 
-def try_decode(cipher_text: str) -> bytes:
-    """自动识别 base64 / hex"""
+def try_decode(cipher_text: str, encoding: str = "auto") -> bytes:
+    """Decode ciphertext without treating hexadecimal text as Base64."""
     t = cipher_text.strip().strip('"').strip("'").replace("\\/", "/")
-    try:
-        return base64.b64decode(t, validate=False)
-    except Exception:
-        pass
-    try:
+    if encoding in ("auto", "hex") and len(t) % 2 == 0 and t and all(c in "0123456789abcdefABCDEF" for c in t):
         return binascii.unhexlify(t)
-    except Exception:
-        pass
+    if encoding == "hex":
+        raise ValueError("输入不是有效 hex")
+    if encoding in ("auto", "base64"):
+        try:
+            padded = t + "=" * (-len(t) % 4)
+            return base64.b64decode(padded, validate=True)
+        except (binascii.Error, ValueError):
+            if encoding == "base64":
+                raise ValueError("输入不是有效 Base64")
+    if encoding == "raw":
+        return t.encode("latin-1")
     return t.encode("latin-1")
 
 
@@ -105,7 +129,7 @@ def cmd_dec(a):
         if not line:
             continue
         try:
-            out = pretty(aes_dec(try_decode(line), key, iv, a.mode))
+            out = pretty(aes_dec(try_decode(line, a.encoding), key, iv, a.mode, a.zero_iv))
             print("--- [%d] ---" % i)
             print(out[:2000])
         except Exception as e:
@@ -115,14 +139,14 @@ def cmd_dec(a):
 def cmd_enc(a):
     key = norm_key(a.key)
     iv = norm_key(a.iv) if a.iv else None
-    ct = aes_enc(a.plain.encode(), key, iv, a.mode)
+    ct = aes_enc(a.plain.encode(), key, iv, a.mode, a.zero_iv)
     print("raw    :", ct)
     print("b64    :", base64.b64encode(ct).decode())
     print("hex    :", binascii.hexlify(ct).decode())
 
 
 def cmd_brute(a):
-    ct = try_decode(a.b64)
+    ct = try_decode(a.b64, a.encoding)
     try:
         words = [l.strip() for l in open(a.wordlist, encoding="utf-8", errors="ignore") if l.strip()]
     except Exception as e:
@@ -172,15 +196,19 @@ def main():
     d = sub.add_parser("dec")
     d.add_argument("--key", required=True)
     d.add_argument("--iv")
-    d.add_argument("--mode", default="ecb")
-    d.add_argument("--b64", default="")
-    d.add_argument("--file")
+    d.add_argument("--mode", default="ecb", choices=["ecb", "cbc"])
+    d.add_argument("--zero-iv", action="store_true", help="CBC 明确使用全零 IV")
+    d.add_argument("--encoding", default="auto", choices=["auto", "base64", "hex", "raw"])
+    d_input = d.add_mutually_exclusive_group(required=True)
+    d_input.add_argument("--b64")
+    d_input.add_argument("--file")
     d.set_defaults(func=cmd_dec)
 
     e = sub.add_parser("enc")
     e.add_argument("--key", required=True)
     e.add_argument("--iv")
-    e.add_argument("--mode", default="ecb")
+    e.add_argument("--mode", default="ecb", choices=["ecb", "cbc"])
+    e.add_argument("--zero-iv", action="store_true", help="CBC 明确使用全零 IV")
     e.add_argument("--plain", required=True)
     e.set_defaults(func=cmd_enc)
 
@@ -188,6 +216,7 @@ def main():
     b.add_argument("--b64", required=True)
     b.add_argument("--wordlist", required=True)
     b.add_argument("--expect", default='{"')
+    b.add_argument("--encoding", default="auto", choices=["auto", "base64", "hex", "raw"])
     b.set_defaults(func=cmd_brute)
 
     s = sub.add_parser("sign")
