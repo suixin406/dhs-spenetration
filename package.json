@@ -1,9 +1,9 @@
 {
   "name": "@local/dsh-pentest-preset",
-  "version": "3.1.0",
+  "version": "4.0.0",
   "private": false,
   "type": "module",
-  "description": "DeepSeek Harness 渗透与逆向一体化 Agent 预设：56 个阶段技能 + 49 篇实战知识库 + 7 个工具 + 自动决断引擎",
+  "description": "DeepSeek Harness 授权安全测试与逆向 Agent 预设：74 个技能、48 篇知识正文、6 个命令行工具和范围门禁",
   "keywords": [
     "dsh",
     "deepseek-harness",
@@ -15,14 +15,34 @@
     "逆向"
   ],
   "license": "MIT",
+  "repository": {
+    "type": "git",
+    "url": "git+https://github.com/suixin406/dhs-spenetration.git"
+  },
+  "homepage": "https://github.com/suixin406/dhs-spenetration#readme",
+  "bugs": {
+    "url": "https://github.com/suixin406/dhs-spenetration/issues"
+  },
   "files": [
     "cordis.patch.yml",
     "PROMPT.md",
     "README.md",
     "LICENSE",
+    "LICENSES",
+    "NOTICE",
+    "THIRD_PARTY_NOTICES.md",
+    "CHANGELOG.md",
+    "AUTHORIZED-TARGETS.template.md",
+    "AUTHORIZED-TARGETS.template.json",
+    "requirements.txt",
+    "scripts",
+    "tests",
+    "templates",
     "skills",
     "知识库",
-    "tools"
+    "tools",
+    "!**/__pycache__/**",
+    "!**/*.pyc"
   ],
   "dsh": {
     "bundle": {
@@ -30,8 +50,32 @@
     }
   },
   "scripts": {
-    "check": "node -e \"const fs=require('fs');const d='skills';let n=0,bad=[];for(const x of fs.readdirSync(d)){const p=d+'/'+x+'/SKILL.md';if(!fs.existsSync(p)){bad.push(x);continue}n++}console.log('skills:',n,'missing:',bad.length?bad:'none')\""
+    "sync:persona": "node scripts/sync-persona.mjs",
+    "check": "node scripts/check.mjs",
+    "test": "node scripts/check.mjs && node scripts/run-python-tests.mjs",
+    "prepack": "node scripts/check.mjs"
   },
+  "peerDependencies": {
+    "@deepseek-ai/cordis": "^4.0.1",
+    "dsh-purge-safe": ">=2.0.0 <3"
+  },
+  "peerDependenciesMeta": {
+    "@deepseek-ai/cordis": {
+      "optional": true
+    },
+    "dsh-purge-safe": {
+      "optional": true
+    }
+  },
+  "projectStats": {
+    "skills": 74,
+    "knowledgeArticles": 48,
+    "cliTools": 6
+  },
+  "dshTarget": "0.2.2-rc.3",
+  "dshTargets": [
+    "0.2.2-rc.3"
+  ],
   "engines": {
     "node": ">=18"
   }
