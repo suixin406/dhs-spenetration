@@ -34,3 +34,10 @@ enabled: true
 
 ## 落库要求
 provenance = `active`，tool = `nmap`/`masscan`，记录 scan_run。
+
+## 判废
+| 现象 | 结论 |
+|---|---|
+| 全端口"开放"但连接 RST | 端口跳变网关，不是真服务 |
+| 只扫到 CDN 的 80/443 | 打的是 CDN |
+| 服务版本靠 banner 猜 | 需进一步指纹确认 |
