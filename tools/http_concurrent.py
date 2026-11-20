@@ -18,17 +18,26 @@
 """
 import argparse
 import base64
+import os
 import sys
 import threading
 import time
 from concurrent.futures import ThreadPoolExecutor, as_completed
 
+from scope_guard import require_allowed
+
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
+
 try:
     import requests
     import urllib3
-    urllib3.disable_warnings()
 except Exception:
-    sys.exit("需要 requests：pip install requests")
+    requests = None
+    urllib3 = None
 
 UA = {"User-Agent": "Mozilla/5.0 (iPhone; CPU iPhone OS 17_0 like Mac OS X)",
       "Accept": "application/json, text/plain, */*"}
@@ -76,8 +85,18 @@ def main():
         p.add_argument("--show", action="store_true", help="打印响应片段")
         p.add_argument("--out", default="", help="结果文件")
         p.add_argument("--retry", type=int, default=1)
+        p.add_argument("--insecure", action="store_true", help="关闭 TLS 证书校验")
+        p.add_argument("--scope-config", help="AUTHORIZED-TARGETS.json 路径")
 
     a = ap.parse_args()
+    if requests is None:
+        ap.error("需要 requests：python -m pip install -r requirements.txt")
+    if a.threads < 1 or a.threads > 512:
+        ap.error("--threads must be between 1 and 512")
+    if a.retry < 0 or a.retry > 20:
+        ap.error("--retry must be between 0 and 20")
+    if a.insecure and urllib3 is not None:
+        urllib3.disable_warnings(urllib3.exceptions.InsecureRequestWarning)
     hdrs = dict(UA)
     if a.header:
         for kv in a.header.split(";"):
@@ -93,6 +112,11 @@ def main():
         urls = [l.strip() for l in open(a.urls, encoding="utf-8", errors="ignore") if l.strip()]
     if not urls:
         sys.exit("需要 --url 或 --urls")
+    for url in urls:
+        try:
+            require_allowed(url, "active", a.scope_config)
+        except (ValueError, PermissionError) as exc:
+            ap.error("scope denied for %s: %s" % (url, exc))
 
     params = [""]
     if a.params:
@@ -113,6 +137,9 @@ def main():
                 jobs.append((u, d))
 
     lock = threading.Lock()
+    if a.out:
+        parent = os.path.dirname(os.path.abspath(a.out))
+        os.makedirs(parent, exist_ok=True)
     out = open(a.out, "w", encoding="utf-8") if a.out else None
     n = 0
     t0 = time.time()
@@ -121,12 +148,12 @@ def main():
         nonlocal n
         u, d = job
         last = ""
-        for _ in range(max(1, a.retry)):
+        for attempt in range(a.retry + 1):
             try:
                 if a.cmd == "get":
-                    r = requests.get(u, headers=hdrs, timeout=a.timeout, verify=False)
+                    r = requests.get(u, headers=hdrs, timeout=a.timeout, verify=not a.insecure)
                 else:
-                    r = requests.post(u, data=d, headers=hdrs, timeout=a.timeout, verify=False)
+                    r = requests.post(u, data=d, headers=hdrs, timeout=a.timeout, verify=not a.insecure)
                 body = maybe_decrypt(r.text, key)
                 last = "%s len=%-7d %s" % (r.status_code, len(r.content), body[:160].replace("\n", " "))
                 with lock:
@@ -140,7 +167,7 @@ def main():
                         print("[%d] %.0f/s" % (n, n / el if el else 0), file=sys.stderr)
                 return last
             except Exception as e:
-                last = "ERR " + str(e)[:60]
+                last = "ERR attempt=%d/%d %s" % (attempt + 1, a.retry + 1, str(e)[:60])
         return last
 
     with ThreadPoolExecutor(max_workers=a.threads) as ex:
