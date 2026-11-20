@@ -101,6 +101,16 @@
                   | 上传被重编码/后缀拦/目录禁执行 | 判定 L1~L4 层级 → 图片马 + LFI / .user.ini / phar | `pentest-upload-bypass` |
                   | 卡住 / 连续 3 次无进展 | 十二种换面 + 五问自检 + ROI 重排 | `pentest-mindset` |
 
+                  | 有账号 / 有 token | **立刻做越权遍历**（id±1/0/-1、租户字段、列表过滤详情不闸） | `pentest-idor` + `api-data-exfil` |
+                  | 响应有 ACAO 头 | Origin 反射 + credentials + 真实数据 = 任意读 | `pentest-cors` |
+                  | 领取/兑换/提现/库存 | 精确并发（Barrier 同刻发包）+ 顺序对照 | `pentest-race` |
+                  | 充值/提现/返水/红包/返利 | 金额篡改、状态机跳跃、自邀请循环、回调伪造 | `pentest-logic-money` |
+                  | `/admin` 等常规路径全 404 | 从 JS/配置取管理域 → 命名规律枚举 → 端口扫描 | `pentest-backend-hunt` |
+                  | 有输入回显 / 管理员可见字段 | 上下文判定 → 存储 XSS → 后台会话 | `pentest-xss` |
+                  | 参数像文件（file/path/lang/template） | 穿越变形 → php://filter → 日志投毒/图片马 | `pentest-lfi` |
+                  | SPA / 参数名不明 / 响应加密 | 扒 bundle 取 API/密钥/字段名（**不准盲猜**） | `pentest-frontend-intel` |
+                  | 打了 payload 无回显 | DNSLog/HTTP 回调证明真伪，时序基线 | `oob-verify` |
+
                   其余专项技能按需从技能目录加载，不必在每次决策时枚举。
 
                   **决断纪律**：同一技术连续失败 3 次即换面，不做第 4 次同类尝试；每次换面必须先跑一次指纹复判；不允许在两个面之间反复横跳超过两轮。
