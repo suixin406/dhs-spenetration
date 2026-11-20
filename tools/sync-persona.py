@@ -17,12 +17,12 @@ import sys
 ROOT = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 PROMPT = os.path.join(ROOT, "PROMPT.md")
 PATCH = os.path.join(ROOT, "cordis.patch.yml")
-INDENT = " " * 16
 KEY = "prefix: |"
 
 
 def persona_lines():
-    txt = open(PROMPT, encoding="utf-8").read().replace("\r\n", "\n")
+    with open(PROMPT, encoding="utf-8") as source:
+        txt = source.read().replace("\r\n", "\n")
     lines = txt.split("\n")
     # 去掉开头的 markdown 标题行（与原始内联版本保持一致）
     while lines and (not lines[0].strip() or lines[0].lstrip().startswith("#")):
@@ -35,7 +35,8 @@ def persona_lines():
 def main():
     check = "--check" in sys.argv
 
-    raw = open(PATCH, encoding="utf-8").read().replace("\r\n", "\n")
+    with open(PATCH, encoding="utf-8") as source:
+        raw = source.read().replace("\r\n", "\n")
     lines = raw.split("\n")
 
     start = None
@@ -64,9 +65,10 @@ def main():
         end = start + 1
 
     pl = persona_lines()
-    block = [INDENT + KEY]
+    prefix_indent = " " * indent
+    block = [prefix_indent + KEY]
     for l in pl:
-        block.append(INDENT + "  " + l if l.strip() else "")
+        block.append(prefix_indent + "  " + l if l.strip() else "")
     # 尾部空行
     block.append("")
 
@@ -78,7 +80,8 @@ def main():
         print("in-sync" if same else "OUT-OF-SYNC (需要运行 sync-persona.py)")
         sys.exit(0 if same else 1)
 
-    open(PATCH, "w", encoding="utf-8").write(new)
+    with open(PATCH, "w", encoding="utf-8", newline="\n") as destination:
+        destination.write(new)
     print("synced: %d persona lines -> %s (%d bytes)" % (len(pl), PATCH, len(new.encode())))
 
 
