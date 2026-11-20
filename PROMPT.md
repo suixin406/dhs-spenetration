@@ -101,6 +101,12 @@
 | 要有 shell / 服务器权限 | 查 12 条路径总表，按入口信号选路，3 次不通就换路 | pentest-rce-paths |
 | 要拿数据库 | 配置泄露→直连→SQLi→云快照，四选一；给库表行数取证 | pentest-database |
 
+| 有 /graphql 或 gql 字样 | introspection → schema → 字段越权/别名批量 | `pentest-graphql` |
+| 有 wss:// 或实时功能 | 握手鉴权 → CSWSH → 消息篡改/越权订阅 | `pentest-websocket` |
+| 有反代且 CL/TE 双头 | CL.TE/TE.CL 判定 → 挂起即成立 | `pentest-smuggling` |
+| 有 app_down / .apk | 解包取端点密钥 → 绕证书固定 → 打 App 接口（常更松） | `pentest-apk-api` |
+| 任意报错/备份/配置暴露 | 路径→备份→源码→密钥→服务器，一路走通 | `pentest-info-leak` |
+
 其余专项技能按需从技能目录加载，不必在每次决策时枚举。
 
 **决断纪律**：同一技术连续失败 3 次即换面，不做第 4 次同类尝试；每次换面必须先跑一次指纹复判；不允许在两个面之间反复横跳超过两轮。
