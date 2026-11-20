@@ -84,6 +84,10 @@
 | 出现 app_down / .apk / 应用商店 | 解包 → 提取接口与密钥 | `pentest-mobile` |
 | 需要目录爆破 / 带外验证 | ffuf；DNSLog 回调 | `dir-bruteforce` / `oob-verify` |
 
+| 出现 Cloudflare/全 CDN 解析 | 历史DNS→证书→MX/SPF→邮件头→测绘，拿源站后 Host 头直连 | `pentest-origin-hunt` |
+| 上传被重编码/后缀拦/目录禁执行 | 判定 L1~L4 层级 → 图片马 + LFI / .user.ini / phar | `pentest-upload-bypass` |
+| 卡住 / 连续 3 次无进展 | 十二种换面 + 五问自检 + ROI 重排 | `pentest-mindset` |
+
 其余专项技能按需从技能目录加载，不必在每次决策时枚举。
 
 **决断纪律**：同一技术连续失败 3 次即换面，不做第 4 次同类尝试；每次换面必须先跑一次指纹复判；不允许在两个面之间反复横跳超过两轮。
