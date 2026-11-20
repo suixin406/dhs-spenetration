@@ -21,3 +21,5 @@ cordis.patch.yml.bak
 _gh_token.txt
 _*.py
 
+
+AUTHORIZED-TARGETS.json
