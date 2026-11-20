@@ -1,0 +1,14 @@
+dsh-pentest-preset
+Copyright 2026 dsh-pentest-preset contributors
+
+This distribution includes modified skill documentation derived from:
+
+  dsh-purge-safe
+  Copyright 2026 CallMeGuLab
+  https://github.com/CallMeGuLab/dsh-purge-safe
+
+Those portions are licensed under the Apache License, Version 2.0.
+Files were reorganized into DSH filesystem skills and may contain local
+adaptations, naming changes, and integration guidance.
+
+This project is not affiliated with DeepSeek AI or the DeepSeek Harness team.
