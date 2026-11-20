@@ -25,6 +25,19 @@ import hmac
 import json
 import sys
 
+for _stream in (sys.stdout, sys.stderr):
+    try:
+        _stream.reconfigure(encoding="utf-8", errors="replace")
+    except (AttributeError, OSError):
+        pass
+
+
+HASHES = {
+    "HS256": hashlib.sha256,
+    "HS384": hashlib.sha384,
+    "HS512": hashlib.sha512,
+}
+
 
 def b64u_dec(s: str) -> bytes:
     s += "=" * (-len(s) % 4)
@@ -45,10 +58,20 @@ def parts(tok: str):
     return p, hdr, pay, sig
 
 
-def sign_hs(header: dict, payload: dict, secret: bytes) -> str:
+def resolve_hash(header: dict, override: str = ""):
+    alg = (override or str(header.get("alg") or "")).upper()
+    if alg not in HASHES:
+        sys.exit("只支持 HS256/HS384/HS512；当前 alg=%r" % alg)
+    return alg, HASHES[alg]
+
+
+def sign_hs(header: dict, payload: dict, secret: bytes, alg: str = "") -> str:
+    selected, digest = resolve_hash(header, alg)
+    header = dict(header)
+    header["alg"] = selected
     h = b64u_enc(json.dumps(header, separators=(",", ":")).encode())
     p = b64u_enc(json.dumps(payload, separators=(",", ":")).encode())
-    s = b64u_enc(hmac.new(secret, (h + "." + p).encode(), hashlib.sha256).digest())
+    s = b64u_enc(hmac.new(secret, (h + "." + p).encode(), digest).digest())
     return "%s.%s.%s" % (h, p, s)
 
 
@@ -87,15 +110,16 @@ def cmd_tamper(a):
 
 def cmd_brute(a):
     p, hdr, pay, sig = parts(a.token)
+    alg, digest = resolve_hash(hdr, a.alg)
     msg = (p[0] + "." + p[1]).encode()
     try:
         words = [l.strip() for l in open(a.wordlist, encoding="utf-8", errors="ignore") if l.strip()]
     except Exception as e:
         sys.exit("读不到字典: %s" % e)
-    print("[+] 字典 %d 条，alg=%s" % (len(words), hdr.get("alg")))
+    print("[+] 字典 %d 条，alg=%s" % (len(words), alg))
     for w in words:
-        s = b64u_enc(hmac.new(w.encode(), msg, hashlib.sha256).digest())
-        if s == sig:
+        s = b64u_enc(hmac.new(w.encode(), msg, digest).digest())
+        if hmac.compare_digest(s, sig):
             print("\n*** HIT secret = %r" % w)
             return
     print("[-] 未命中")
@@ -110,7 +134,7 @@ def cmd_sign(a):
                 pay[k] = json.loads(v)
             except Exception:
                 pay[k] = v
-    print(sign_hs(hdr, pay, a.secret.encode()))
+    print(sign_hs(hdr, pay, a.secret.encode(), a.alg))
 
 
 def main():
@@ -123,8 +147,12 @@ def main():
             p.add_argument("--set", default="", help='k=v,k2=v2（值会尝试 JSON 解析）')
         if n == "brute":
             p.add_argument("--wordlist", required=True)
+            p.add_argument("--alg", choices=sorted(HASHES), default="",
+                           help="覆盖 JWT header 的 HMAC 算法")
         if n == "sign":
             p.add_argument("--secret", required=True)
+            p.add_argument("--alg", choices=sorted(HASHES), default="",
+                           help="覆盖 JWT header 的 HMAC 算法")
     a = ap.parse_args()
     {
         "decode": cmd_decode,
