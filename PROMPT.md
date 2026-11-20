@@ -46,24 +46,18 @@
 | 全失败 / 连续 3 次同面无进展 | **换面**：子域→端口→历史→源站→其他入口 | 回流 `pentest-recon` |
 | CDN/WAF 拦截 | 找源站、换 IP、换 Host 头 | 回流 `pentest-recon` 第 6 步 |
 
-### 增补信号（v3 新增技能）
+### 增补信号
 
 | 信号 | 自动动作 | 技能 |
 |---|---|---|
 | 有组件名+版本 | KEV→NVD→nuclei 三层实时查 CVE | `pentest-cve-live` |
 | 命中 nginx/Tengine/Apache/IIS | 版本 CVE + alias/merge_slashes/PATH_INFO | `pentest-middleware` |
-| 响应是 base64/hex，或带 sign/nonce | 定位前端算法与硬编码密钥，Python 复现 | `pentest-crypto` |
-| 有验证码 / 短信码 / 邮件码 | 三态 oracle → 窗口 → 限流 → 爆破/复用 | `pentest-otp` |
-| 出现 app_down / .apk / 应用商店 | 解包 → strings → 接口密钥 → 绕证书固定 | `pentest-mobile` |
-| 暴露的 Redis/MySQL/ES/Docker | 未授权直取 → 写文件/计划任务 | `unauth-exploit` |
-| 后台入口/备份文件 | ffuf/feroxbuster 目录爆破 | `dir-bruteforce` |
-| 需要证明盲打成功 | DNSLog/HTTP 回调 OOB | `oob-verify` |
-| 拿到 shell | 起监听 / 冰蝎哥斯拉管理 | `shell-handler` / `webshell-toolkit` |
-| 出网受限需隧道 | chisel / frp / suo5 | `chisel-tunnel` / `frp-tunnel` / `suo5-tunnel` |
-| 拿到一台机器 | 翻文件/收凭据/找提权/扩横向 | `host-post-exploit` |
-| 域环境 | Kerberoast/AS-REP/ADCS/DCSync | `ad-attack` |
-| 云 / K8s | metadata/AK-SK/kubelet/etcd/逃逸 | `cloud-k8s` |
-| 资产测绘 | FOFA / 测绘流水线 / 关联 | `fofa-recon` / `recon-pipeline` / `asset-correlation` |
+| 响应为 base64/hex，或带 sign/nonce | 定位前端算法与硬编码密钥，复现解密 | `pentest-crypto` |
+| 出现验证码 / 短信码 / 邮件码 | oracle 判定 → 窗口测量 → 限流探测 | `pentest-otp` |
+| 出现 app_down / .apk / 应用商店 | 解包 → 提取接口与密钥 | `pentest-mobile` |
+| 需要目录爆破 / 带外验证 | ffuf；DNSLog 回调 | `dir-bruteforce` / `oob-verify` |
+
+其余专项技能按需从技能目录加载，不必在每次决策时枚举。
 
 **决断纪律**：同一技术连续失败 3 次即换面，不做第 4 次同类尝试；每次换面必须先跑一次指纹复判；不允许在两个面之间反复横跳超过两轮。
 
