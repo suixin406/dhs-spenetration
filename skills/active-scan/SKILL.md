@@ -41,3 +41,20 @@ provenance = `active`，tool = `nmap`/`masscan`，记录 scan_run。
 | 全端口"开放"但连接 RST | 端口跳变网关，不是真服务 |
 | 只扫到 CDN 的 80/443 | 打的是 CDN |
 | 服务版本靠 banner 猜 | 需进一步指纹确认 |
+
+## 一·补、可执行命令
+
+```bash
+# 常见端口快速扫
+nmap -Pn -p 21,22,23,25,80,443,445,1433,3306,3389,5432,6379,8080,8443,9200,11211,27017 \
+     --open -T4 <target> -oN loot/nmap-common.txt
+
+# 全端口
+nmap -Pn -p- --min-rate 3000 --open -T4 <target> -oN loot/nmap-all.txt
+
+# 服务版本
+nmap -Pn -sV -sC -p <ports> <target> -oN loot/nmap-sv.txt
+
+# 大段
+masscan -p1-65535 --rate 5000 <cidr> -oL loot/masscan.txt
+```
