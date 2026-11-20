@@ -20,4 +20,21 @@ enabled: true
 ## 落库要求
 每条发现调用 redteam_asset_upsert，provenance 固定为 `passive`，tool 记录具体数据源。
 
+## 判废
+| 现象 | 结论 |
+|---|---|
+| 被动源返回的历史 IP 已失效 | 记"历史 IP 失效"，不当结论 |
+| 只拿到公开 WHOIS | 无额外信息 |
+| 社交平台搜到同名账号 | 需归属验证，不算资产 |
 
+## 一·补、可执行命令
+
+```bash
+curl -sS "https://api.hackertarget.com/hostsearch/?q=<domain>"
+curl -sS "https://otx.alienvault.com/api/v1/indicators/domain/<domain>/passive_dns"
+curl -sS "https://api.mnemonic.no/pdns/v3/<domain>"
+curl -sS "https://rapiddns.io/subdomain/<domain>?full=1"
+curl -sS "https://crt.sh/?q=%25.<domain>&output=json"
+curl -sS "https://web.archive.org/cdx/search/cdx?url=*.<domain>&output=json&limit=200"
+curl -sS "https://rdap.org/domain/<domain>"
+```
